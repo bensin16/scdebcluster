@@ -1,3 +1,9 @@
+/*
+ * MainActivity.java
+ * Created 6/24
+ * Author Drew Bensinger
+ */
+
 package com.scdeb.digitalinstrumentcluster;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -18,31 +24,39 @@ import android.widget.TextView;
 import com.felhr.usbserial.UsbSerialDevice;
 import com.felhr.usbserial.UsbSerialInterface;
 
-import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
 
     // Constants
+    // TODO move constants to own file
     private static final String ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION";
 
     // Usb specific members
+    /** Manager to receive connected usb devices */
     private static UsbManager mManager;
+    /** Connection used to open UsbSerialPort */
     private static UsbDeviceConnection mConnection;
+    /** Represents a connected USB device */
     private static UsbDevice mDevice;
-    private static UsbSerialDevice mSerialPort;
 
     // TextViews
-    //TODO Memory leak with text view being static
+    //TODO **URGENT** Memory leak with text view being static
     //leave for testing
     private static TextView mDataView;
 
+    /**
+     * Register object to create callback function for when data is received
+     */
     private static UsbSerialInterface.UsbReadCallback mCallback = new UsbSerialInterface.UsbReadCallback() {
+        /**
+         * Log data with debug flag and 'USBIN' tag when data is received from a usb device
+         * @param arg0
+         */
         @Override
         public void onReceivedData(byte[] arg0) {
-            String data = "boobs";
+            String data = "";
             data = new String(arg0);
             //data.concat("/n");
             //updateTextView(data);
@@ -50,21 +64,32 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    /**
+     * Broadcast receiver for when an arduino devices is connected
+     */
     private final BroadcastReceiver broadcastReceiver = new BroadcastReceiver() {
+        /**
+         * Ensure action is for usb permissions, set parameters for communication
+         * @param context Context tied to the request
+         * @param intent Intent containing Action that should be 'ACTION_USB_PERMISSION'
+         */
         @Override
         public void onReceive(Context context, Intent intent) {
+            // TODO Resolve possible null pointer exceptions, still works so far
             if (intent.getAction().equals(ACTION_USB_PERMISSION)) {
                 boolean granted = intent.getExtras().getBoolean(UsbManager.EXTRA_PERMISSION_GRANTED);
                 if (granted) {
                     mConnection = mManager.openDevice(mDevice);
-                    mSerialPort = UsbSerialDevice.createUsbSerialDevice(mDevice, mConnection);
-                    if (mSerialPort != null && mSerialPort.open()) {
-                        mSerialPort.setBaudRate(115200);
-                        mSerialPort.setDataBits(UsbSerialInterface.DATA_BITS_8);
-                        mSerialPort.setStopBits(UsbSerialInterface.STOP_BITS_1);
-                        mSerialPort.setParity(UsbSerialInterface.PARITY_NONE);
-                        mSerialPort.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF);
-                        mSerialPort.read(mCallback);
+                    UsbSerialDevice serialPort =
+                                        UsbSerialDevice.createUsbSerialDevice(mDevice, mConnection);
+                    if (serialPort != null && serialPort.open()) {
+                        // TODO maybe lower baud rate to improve accuracy of readings, might not work
+                        serialPort.setBaudRate(115200);
+                        serialPort.setDataBits(UsbSerialInterface.DATA_BITS_8);
+                        serialPort.setStopBits(UsbSerialInterface.STOP_BITS_1);
+                        serialPort.setParity(UsbSerialInterface.PARITY_NONE);
+                        serialPort.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF);
+                        serialPort.read(mCallback);
                     } else {
                         Log.d("SERIAL", "PORT NOT OPEN/PORT NULL");
                     }
@@ -94,11 +119,18 @@ public class MainActivity extends AppCompatActivity {
 
         mDataView = (TextView) findViewById(R.id.textView);
 
+        // Register broadcast receiver with usb permission intent filter
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         registerReceiver(broadcastReceiver, filter);
         setContentView(R.layout.activity_main);
     }
 
+    // TODO move to onCreate to remove requirement of pushing button
+
+    /**
+     * Attempt to connect to an arduino over USB connection
+     * @param view View tied to the button pressed
+     */
     public void onClickStart(View view) {
         mManager = (UsbManager) getSystemService(Context.USB_SERVICE);
         HashMap<String, UsbDevice> usbDevices = mManager.getDeviceList();
@@ -108,7 +140,8 @@ public class MainActivity extends AppCompatActivity {
                 mDevice = entry.getValue();
 
                 int deviceVID = mDevice.getVendorId();
-                if (deviceVID == 0x2341) { //arduino vendor id
+                // Compare device vendor ID to an arduino's vendor ID
+                if (deviceVID == 0x2341) {
                     PendingIntent pi = PendingIntent.getBroadcast(this, 0,
                             new Intent(ACTION_USB_PERMISSION), 0);
                     mManager.requestPermission(mDevice, pi);
@@ -123,10 +156,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         }
-    }
-
-    public static void updateTextView(String updated) {
-        mDataView.setText(updated);
     }
 
 }
